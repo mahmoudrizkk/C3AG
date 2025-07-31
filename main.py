@@ -11,6 +11,7 @@ import socket
 import os
 from ssd1306 import SSD1306_I2C
 from hx711 import WeightSensor, save_calibration, load_calibration, calibrate_with_known_weight
+from ota import OTAUpdater
 
 # --- HARDWARE CONFIGURATION ---
 # HX711 Load Cell Pins (Change if needed)
@@ -53,122 +54,6 @@ cols = [machine.Pin(pin, machine.Pin.IN, machine.Pin.PULL_UP) for pin in COL_PIN
 
 # HX711 Weight Sensor
 sensor = WeightSensor(HX711_CLK_PIN, HX711_DAT_PIN)
-
-# --- OTA UPDATER CLASS ---
-class OTAUpdater:
-    def __init__(self, ssid, password, github_repo, github_src_dir='', main_dir='main', new_version_dir='next'):
-        self.ssid = ssid
-        self.password = password
-        self.github_repo = github_repo.rstrip('/').replace('https://github.com/', '')
-        self.github_src_dir = '' if len(github_src_dir) < 1 else github_src_dir.rstrip('/') + '/'
-        self.main_dir = main_dir
-        self.new_version_dir = new_version_dir
-        
-        # version endpoint
-        self.version_url = 'https://raw.githubusercontent.com/{}/main/version.json'.format(self.github_repo)
-        self.firmware_url = 'https://raw.githubusercontent.com/{}/main/'.format(self.github_repo)
-        
-        # internal
-        self.version_file = 'version.json'
-        self.version_file_new = self.new_version_dir + '/version.json'
-    
-    def check_for_update_to_install_during_next_reboot(self):
-        """Check if update was downloaded, ota install, and perform reboot if required"""
-        if self.new_version_dir in os.listdir():
-            if '.version' in os.listdir(self.new_version_dir):
-                latest_version = self.get_version(self.new_version_dir + '/.version')
-                current_version = self.get_version(self.version_file)
-                if latest_version > current_version:
-                    self.install_update_if_available()
-                    return True
-        return False
-    
-    def download_and_install_update_if_available(self):
-        """Check for updates and install if available"""
-        current_version = self.get_version(self.version_file)
-        latest_version = self.download_latest_version()
-        
-        if latest_version > current_version:
-            self.install_update_if_available()
-            return True
-        return False
-    
-    def check_for_update(self):
-        """Check if update is available"""
-        current_version = self.get_version(self.version_file)
-        latest_version = self.get_latest_version()
-        return latest_version > current_version
-    
-    def download_latest_version(self):
-        """Download the latest version"""
-        latest_version = self.get_latest_version()
-        self.download_all_files(latest_version)
-        return latest_version
-    
-    def get_latest_version(self):
-        """Get the latest version from GitHub"""
-        response = requests.get(self.version_url)
-        return response.json()['version']
-    
-    def get_version(self, version_file):
-        """Get version from file"""
-        try:
-            with open(version_file, 'r') as f:
-                version_json = ujson.loads(f.read())
-                return version_json['version']
-        except:
-            return '0.0.0'
-    
-    def download_all_files(self, version):
-        """Download all files from GitHub"""
-        file_list = self.get_file_list()
-        for file in file_list:
-            self.download_file(file)
-        self.create_version_file(version)
-    
-    def get_file_list(self):
-        """Get list of files from GitHub"""
-        response = requests.get(self.firmware_url + 'file_list.json')
-        return response.json()
-    
-    def download_file(self, file):
-        """Download a file from GitHub"""
-        print('Downloading: ' + file)
-        response = requests.get(self.firmware_url + self.github_src_dir + file)
-        if response.status_code == 200:
-            os.makedirs(self.new_version_dir + '/' + os.path.dirname(file), exist_ok=True)
-            with open(self.new_version_dir + '/' + file, 'w') as f:
-                f.write(response.text)
-        else:
-            print('Error downloading: ' + file)
-    
-    def create_version_file(self, version):
-        """Create version file"""
-        version_json = {'version': version}
-        os.makedirs(self.new_version_dir, exist_ok=True)
-        with open(self.new_version_dir + '/.version', 'w') as f:
-            f.write(ujson.dumps(version_json))
-    
-    def install_update_if_available(self):
-        """Install the update"""
-        if self.new_version_dir in os.listdir():
-            if '.version' in os.listdir(self.new_version_dir):
-                latest_version = self.get_version(self.new_version_dir + '/.version')
-                current_version = self.get_version(self.version_file)
-                if latest_version > current_version:
-                    self.rmtree(self.main_dir)
-                    os.rename(self.new_version_dir, self.main_dir)
-                    machine.reset()
-    
-    def rmtree(self, directory):
-        """Remove directory and all contents"""
-        for entry in os.ilistdir(directory):
-            is_dir = entry[1] == 0x4000
-            if is_dir:
-                self.rmtree(directory + '/' + entry[0])
-            else:
-                os.remove(directory + '/' + entry[0])
-        os.rmdir(directory)
 
 # --- UI HELPER FUNCTIONS ---
 def display_message(line1, line2="", line3="", line4="", duration_ms=0):
@@ -275,15 +160,6 @@ def get_numeric_input(prompt):
         
         time.sleep_ms(10)  # Small delay to prevent busy waiting
 
-def get_current_version():
-    """Get current version for display"""
-    try:
-        with open("version.json", 'r') as f:
-            version_json = ujson.loads(f.read())
-            return str(version_json['version'])
-    except:
-        return "0"
-
 def trigger_ota_update():
     """Handle OTA update process with password protection"""
     time.sleep(0.5)
@@ -322,7 +198,7 @@ def trigger_ota_update():
             last_key = None
         
         time.sleep_ms(100)
-
+        
 # --- DATA HANDLING ---
 def save_weight_data(weight_kg):
     try:
@@ -671,11 +547,7 @@ def run_calibration():
 def main():
     global SAVED  # Access the global flag
     
-    # Get current version
-    current_version = get_current_version()
-    
-    # Show startup with version
-    display_message("Starting...", "Weight System", f"Version: {current_version}", "", 2000)
+    display_message("Starting...", "Weight System")
     sensor.setup()
 
     # Load calibration or force user to calibrate
@@ -690,7 +562,7 @@ def main():
     recent_weights = []
     SAVED = False  # Initialize the save-state flag
 
-    display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send F3:Server 0:OTA", 1500)
+    display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
     
     wait_for_key_release()  # Ensure clean start
 
@@ -708,20 +580,20 @@ def main():
         elif key == 'F1':
             wait_for_key_release()
             view_stored_data()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send F3:Server 0:OTA", 1500)
+            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
         elif key == 'F2':
             wait_for_key_release()
             if send_data_to_api():
                 delete_all_data()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send F3:Server 0:OTA", 1500)
+            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
         elif key == 'F3':
             wait_for_key_release()
             serve_request()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send F3:Server 0:OTA", 1500)
-        elif key == '0':  # Use '0' key for OTA update
+            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
+        elif key == '0':  # Use '*' key for OTA update
             wait_for_key_release()
             trigger_ota_update()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send F3:Server 0:OTA", 1500)
+            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
         
         # --- Read and Process Weight ---
         weight = sensor.get_stable_weight(samples=2, delay=0.01)
