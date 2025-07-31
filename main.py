@@ -183,6 +183,13 @@ def trigger_ota_update():
         if key and key != last_key:
             if key == 'E':  # Enter key
                 if password_buffer == "1234":  # OTA password
+                    display_message("Connecting WiFi...", "Please wait", "", "", 0)
+                    
+                    # First ensure WiFi connection
+                    if not connect_wifi():
+                        display_message("WiFi Failed!", "Cannot update", "without connection", "", 3000)
+                        return
+                    
                     display_message("Starting OTA...", "Please wait", "", "", 0)
                     try:
                         firmware_url = "https://github.com/mahmoudrizkk/C3AG/"
