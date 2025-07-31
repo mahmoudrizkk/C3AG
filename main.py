@@ -160,6 +160,15 @@ def get_numeric_input(prompt):
         
         time.sleep_ms(10)  # Small delay to prevent busy waiting
 
+def get_current_version():
+    """Get current version for display"""
+    try:
+        with open("version.json", 'r') as f:
+            version_json = ujson.loads(f.read())
+            return str(version_json['version'])
+    except:
+        return "0"
+
 def trigger_ota_update():
     """Handle OTA update process with password protection"""
     time.sleep(0.5)
@@ -547,7 +556,11 @@ def run_calibration():
 def main():
     global SAVED  # Access the global flag
     
-    display_message("Starting...", "Weight System")
+    # Get current version
+    current_version = get_current_version()
+    
+    # Show startup with version
+    display_message("Starting...", "Weight System", f"Version: {current_version}", "", 2000)
     sensor.setup()
 
     # Load calibration or force user to calibrate
