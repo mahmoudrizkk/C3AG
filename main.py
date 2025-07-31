@@ -560,7 +560,7 @@ def main():
     current_version = get_current_version()
     
     # Show startup with version
-    display_message("Starting...", "Weight System", f"Version: {current_version}", "", 2000)
+    display_message("Starting..", "Weight System", f"Version: {current_version}", "", 2000)
     sensor.setup()
 
     # Load calibration or force user to calibrate
