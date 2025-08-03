@@ -336,7 +336,7 @@ def save_weight_data(weight_kg):
     with open("data.json", "w") as f:
         ujson.dump(data, f)
     
-    display_message("SAVED!", f"{weight_kg:.3f} kg", "", f"Total: {len(data)}", 2000)
+    display_message("SAVED!", f"{weight_kg:.3f} kg", "", f"Total: {len(data)}", 500)
 
 def view_stored_data():
     try:
