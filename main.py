@@ -662,7 +662,7 @@ def main():
                             recent_weights = []
                             last_stable_time = None
                             # Show saved message briefly
-                            display_message("Saved!", "Remove weight", "to measure again", "", 1500)
+                            # display_message("Saved!", "Remove weight", "to measure again", "", 1500)
                             continue
                     else:
                         last_stable_time = None
