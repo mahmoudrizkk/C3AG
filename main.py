@@ -214,6 +214,110 @@ def trigger_ota_update():
             last_key = None
         
         time.sleep_ms(100)
+
+def show_config_menu():
+    """Show configuration menu with all options"""
+    menu_options = [
+        "1: Calibration",
+        "2: Send to API", 
+        "3: Server Mode",
+        "4: OTA Update",
+        "5: View Data",
+        "6: Delete Data",
+        "0: Back to Main"
+    ]
+    
+    current_option = 0
+    last_key = None
+    display_config_menu(menu_options, current_option)
+    
+    wait_for_key_release()
+    
+    while True:
+        key = scan_keypad_debounced()
+        
+        if key and key != last_key:
+            if key == '1':  # Calibration
+                wait_for_key_release()
+                run_calibration()
+                display_config_menu(menu_options, current_option)
+            elif key == '2':  # Send to API
+                wait_for_key_release()
+                if send_data_to_api():
+                    delete_all_data()
+                display_config_menu(menu_options, current_option)
+            elif key == '3':  # Server Mode
+                wait_for_key_release()
+                serve_request()
+                display_config_menu(menu_options, current_option)
+            elif key == '4':  # OTA Update
+                wait_for_key_release()
+                trigger_ota_update()
+                display_config_menu(menu_options, current_option)
+            elif key == '5':  # View Data
+                wait_for_key_release()
+                view_stored_data()
+                display_config_menu(menu_options, current_option)
+            elif key == '6':  # Delete Data
+                wait_for_key_release()
+                delete_all_data()
+                display_config_menu(menu_options, current_option)
+            elif key == '0':  # Back to main
+                wait_for_key_release()
+                return
+            elif key == 'E':  # Enter/Confirm
+                wait_for_key_release()
+                # Execute the selected option
+                if current_option == 0:  # Calibration
+                    run_calibration()
+                elif current_option == 1:  # Send to API
+                    if send_data_to_api():
+                        delete_all_data()
+                elif current_option == 2:  # Server Mode
+                    serve_request()
+                elif current_option == 3:  # OTA Update
+                    trigger_ota_update()
+                elif current_option == 4:  # View Data
+                    view_stored_data()
+                elif current_option == 5:  # Delete Data
+                    delete_all_data()
+                elif current_option == 6:  # Back to main
+                    return
+                display_config_menu(menu_options, current_option)
+            elif key == 'C':  # Navigate up
+                current_option = (current_option - 1) % len(menu_options)
+                display_config_menu(menu_options, current_option)
+            elif key == 'M':  # Navigate down
+                current_option = (current_option + 1) % len(menu_options)
+                display_config_menu(menu_options, current_option)
+            
+            last_key = key
+        elif not key:
+            last_key = None
+        
+        time.sleep_ms(100)
+
+def display_config_menu(options, selected_index):
+    """Display the configuration menu with selection indicator"""
+    oled.fill(0)
+    oled.text("Configuration Menu", 0, 0)
+    
+    # Show up to 3 options at a time
+    start_idx = max(0, min(selected_index - 1, len(options) - 3))
+    end_idx = min(start_idx + 3, len(options))
+    
+    y_pos = 15
+    for i in range(start_idx, end_idx):
+        option_text = options[i]
+        if i == selected_index:
+            option_text = "> " + option_text
+        else:
+            option_text = "  " + option_text
+        
+        oled.text(option_text, 0, y_pos)
+        y_pos += 12
+    
+    oled.show()
         
 # --- DATA HANDLING ---
 def save_weight_data(weight_kg):
@@ -582,7 +686,7 @@ def main():
     recent_weights = []
     SAVED = False  # Initialize the save-state flag
 
-    display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
+    display_message("Ready!", "", "C:Tare M:Calib", "F1:Config F2:View", 1500)
     
     wait_for_key_release()  # Ensure clean start
 
@@ -599,21 +703,16 @@ def main():
             SAVED = False  # Reset on calibration
         elif key == 'F1':
             wait_for_key_release()
-            view_stored_data()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
+            show_config_menu()
+            display_message("Ready!", "", "C:Tare M:Calib", "F1:Config F2:View", 1500)
         elif key == 'F2':
             wait_for_key_release()
-            if send_data_to_api():
-                delete_all_data()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
-        elif key == 'F3':
-            wait_for_key_release()
-            serve_request()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
-        elif key == '0':  # Use '*' key for OTA update
+            view_stored_data()
+            display_message("Ready!", "", "C:Tare M:Calib", "F1:Config F2:View", 1500)
+        elif key == '0':  # Use '0' key for OTA update
             wait_for_key_release()
             trigger_ota_update()
-            display_message("Ready!", "", "C:Tare M:Calib", "F1:View F2:Send", 1500)
+            display_message("Ready!", "", "C:Tare M:Calib", "F1:Config F2:View", 1500)
         
         # --- Read and Process Weight ---
         weight = sensor.get_stable_weight(samples=2, delay=0.01)
